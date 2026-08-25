@@ -1,0 +1,12 @@
+CORREÇÃO - DADOS FICTÍCIOS / FIRESTORE
+
+O sistema recriava automaticamente os registros de demonstração quando uma coleção do Firestore ficava vazia.
+
+A correção foi aplicada em app/page.tsx:
+- coleções vazias agora permanecem vazias;
+- serviceOrders, clients, motorcycles, products, expenses etc. não são mais repovoadas automaticamente;
+- employees e employeeCompensation também não são mais recriados com dados de demonstração quando vazios;
+- novos dados cadastrados pelo sistema continuam sincronizando normalmente com o Firestore.
+
+Depois de publicar esta versão na Vercel, você pode apagar os dados fictícios no Firestore.
+Recomendado manter userAccess e não apagar usuários do Firebase Authentication.

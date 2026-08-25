@@ -530,13 +530,9 @@ function useFirebaseSyncedCollection<T extends { id: string }>(
       return () => window.clearTimeout(timer);
     }
     const stop = observeCollection<T>(collectionName, (remoteRecords) => {
-      if (!remoteRecords.length) {
-        remoteReady.current = true;
-        remoteSignature.current = JSON.stringify(initialRecords);
-        setRecords(initialRecords);
-        if (writable) void replaceCollection(collectionName, initialRecords).catch((firebaseError) => errorHandler.current(firebaseError));
-        return;
-      }
+      // Em produção, uma coleção vazia deve permanecer vazia.
+      // Antes, o sistema restaurava automaticamente os registros fictícios
+      // sempre que todos os documentos eram apagados no Firestore.
       remoteReady.current = true;
       remoteSignature.current = JSON.stringify(remoteRecords);
       setRecords(remoteRecords);
@@ -580,13 +576,8 @@ function useFirebaseSyncedEmployees(
       return () => window.clearTimeout(timer);
     }
     return observeEmployees<UserConfig>(isAdmin, (remoteRecords) => {
-      if (!remoteRecords.length) {
-        remoteReady.current = true;
-        remoteSignature.current = JSON.stringify(initialRecords);
-        setRecords(initialRecords);
-        if (isAdmin) void replaceEmployees(initialRecords).catch((firebaseError) => errorHandler.current(firebaseError));
-        return;
-      }
+      // Funcionários também não são recriados a partir dos dados de demonstração
+      // quando as coleções employees/employeeCompensation estiverem vazias.
       remoteReady.current = true;
       remoteSignature.current = JSON.stringify(remoteRecords);
       setRecords(remoteRecords);

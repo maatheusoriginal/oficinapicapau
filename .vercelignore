@@ -1,0 +1,10 @@
+node_modules
+.next
+.vercel
+.firebase
+firebase-debug.log
+*.zip
+*.log
+service-account*.json
+firebase-admin*.json
+*-firebase-adminsdk-*.json
