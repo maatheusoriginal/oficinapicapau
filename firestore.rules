@@ -1,0 +1,142 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasAccessProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/userAccess/$(request.auth.uid));
+    }
+
+    function accessProfile() {
+      return get(/databases/$(database)/documents/userAccess/$(request.auth.uid)).data;
+    }
+
+    function activeUser() {
+      return hasAccessProfile() && accessProfile().active == true;
+    }
+
+    function isAdmin() {
+      return activeUser() && accessProfile().role == 'Super Admin';
+    }
+
+    function isCounter() {
+      return activeUser() && accessProfile().role == 'Balcão';
+    }
+
+    function isMechanic() {
+      return activeUser() && accessProfile().role == 'Mecânico';
+    }
+
+    function legacyCounterPermission(permission) {
+      return isCounter()
+        && !('permissions' in accessProfile())
+        && permission in [
+          'orders.view', 'orders.create', 'orders.update', 'budgets.view',
+          'pos.use', 'quickService.use', 'inventory.view', 'inventory.manage',
+          'customers.view', 'customers.manage', 'finance.view', 'finance.manage'
+        ];
+    }
+
+    function legacyMechanicPermission(permission) {
+      return isMechanic()
+        && !('permissions' in accessProfile())
+        && (
+          permission in ['orders.view', 'orders.update', 'budgets.view', 'inventory.view', 'customers.view']
+          || (accessProfile().employeeId == 'USR-003' && permission in ['orders.create', 'team.view'])
+        );
+    }
+
+    function hasPermission(permission) {
+      return isAdmin() || (
+        activeUser() && (
+          (('permissions' in accessProfile()) && accessProfile().permissions is list && accessProfile().permissions.hasAny([permission]))
+          || legacyCounterPermission(permission)
+          || legacyMechanicPermission(permission)
+        )
+      );
+    }
+
+    match /userAccess/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /employees/{employeeId} {
+      allow read: if activeUser();
+      allow write: if isAdmin();
+    }
+
+    match /employeeCompensation/{employeeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /serviceOrders/{orderId} {
+      allow read: if hasPermission('orders.view');
+      allow create: if hasPermission('orders.create');
+      allow update: if (isCounter() && hasPermission('orders.update')) || isAdmin() || (
+        isMechanic()
+        && hasPermission('orders.update')
+        && resource.data.mechanicIds is list
+        && resource.data.mechanicIds.hasAny([accessProfile().employeeId])
+        && request.resource.data.status in ['Recepção', 'Avaliação', 'Aprovação', 'Em serviço', 'Entrega']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'mechanicNotes', 'completedAt', 'updatedAt'
+        ])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read: if hasPermission('customers.view') || hasPermission('orders.create');
+      allow write: if hasPermission('customers.manage');
+    }
+
+    match /motorcycles/{motorcycleId} {
+      allow read: if hasPermission('customers.view') || hasPermission('orders.create');
+      allow write: if hasPermission('customers.manage');
+    }
+
+    match /products/{productId} {
+      allow read: if hasPermission('inventory.view') || hasPermission('orders.create');
+      allow write: if hasPermission('inventory.manage');
+    }
+
+    match /{collectionName}/{documentId} {
+      allow read: if hasPermission('finance.view') && collectionName in [
+        'expenses', 'financialEntries', 'serviceExchanges', 'cashSessions'
+      ];
+      allow read: if (hasPermission('finance.view') || hasPermission('pos.use') || hasPermission('quickService.use'))
+        && collectionName in ['paymentMachines', 'paymentMethods'];
+      allow write: if hasPermission('finance.manage') && collectionName in [
+        'expenses', 'financialEntries', 'serviceExchanges', 'cashSessions'
+      ];
+      allow read: if (
+        (collectionName == 'partners' && (hasPermission('customers.view') || hasPermission('orders.create')))
+        || (collectionName == 'quickServices' && (hasPermission('quickService.use') || hasPermission('orders.create')))
+        || (collectionName in ['categories', 'stockMovements'] && hasPermission('inventory.view'))
+        || (collectionName == 'suppliers' && hasPermission('inventory.manage'))
+        || (collectionName == 'workshopSettings' && isAdmin())
+      );
+      allow write: if hasPermission('inventory.manage') && collectionName in [
+        'stockMovements'
+      ];
+      allow write: if isAdmin() && collectionName in [
+        'partners', 'quickServices', 'categories', 'suppliers',
+        'paymentMachines', 'paymentMethods', 'workshopSettings'
+      ];
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if activeUser();
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
