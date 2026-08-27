@@ -1,0 +1,8 @@
+{
+  "name": "Pica Pau Motos — Gestão da Oficina",
+  "description": "Sistema de gestão de ordens de serviço, estoque, atendimento e financeiro para oficina mecânica.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
